@@ -1,0 +1,5 @@
+kafka-python
+websocket-client
+# finnhub-python not required for websocket implementation, include if you need REST helpers
+# finnhub-python
+requests
