@@ -231,11 +231,3 @@ Indexing & storage suggestions:
 - [features/feature_builder.py](features/feature_builder.py)
 - [docker-compose.yml](docker-compose.yml)
 
-If you'd like, I can:
-- add example Grafana dashboard JSON templates
-- add a small example dataset and an end-to-end demo script
-- add environment variable examples and a .env.sample
-
----
-
-Acknowledgements: created to support ingestion, training, and realtime detection workflows.
