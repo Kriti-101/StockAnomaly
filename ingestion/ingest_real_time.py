@@ -26,6 +26,12 @@ if repo_root not in sys.path:
 
 import config.settings as settings
 
+# attempt to reuse Postgres insert helper if available
+try:
+    from ingestion.nse_postgres_producer import insert_price
+except Exception:
+    insert_price = None
+
 # kafka setup
 KAFKA_BROKER = getattr(settings, "KAFKA_BROKER", os.environ.get("KAFKA_BROKER", "localhost:9092"))
 producer = KafkaProducer(
@@ -66,35 +72,49 @@ def fetch_nse_quote(symbol: str):
 
 
 def publish_event(symbol: str, price: float, size: int, raw: dict):
-    injected = should_inject(symbol)
+    # normalize symbol for storage/queries (strip exchange suffix if present)
+    short_symbol = symbol.split('.')[0]
+    injected = should_inject(short_symbol)
 
     if injected:
         price *= random.choice([0.6, 1.4])
         size *= random.randint(10, 30)
     else:
-        normal_counter[symbol] += 1
+        normal_counter[short_symbol] += 1
 
     event = {
-        "symbol": symbol,
+        "symbol": short_symbol,
         "price": round(float(price), 4),
         "size": size,
         "timestamp": datetime.utcnow().isoformat(),
         "injected": injected,
-        "normal_count": normal_counter[symbol],
-        "inject_after": inject_after.get(symbol, None),
+        "normal_count": normal_counter[short_symbol],
+        "inject_after": inject_after.get(short_symbol, None),
         "raw": raw,
     }
 
     producer.send(TOPIC, event)
 
+    # optionally write into Postgres table for Grafana (if helper available)
+    try:
+        if insert_price is not None:
+            # attempt to extract a change value from raw data if present
+            change = 0.0
+            price_info = raw.get('priceInfo', {}) if isinstance(raw, dict) else {}
+            change = price_info.get('change', 0.0) or 0.0
+            insert_price(short_symbol, event['price'], size, change)
+    except Exception:
+        # don't fail the live loop if DB write fails
+        print(f"⚠️ Failed writing {short_symbol} to Postgres (continuing)")
+
     if injected:
         print(
-            f"🔥 INJECTED | {symbol} | after {event['inject_after']} normals → "
+            f"🔥 INJECTED | {short_symbol} | after {event['inject_after']} normals → "
             f"price={event['price']} size={event['size']}"
         )
     else:
         print(
-            f"🟢 NORMAL   | {symbol} | count={event['normal_count']} | "
+            f"🟢 NORMAL   | {short_symbol} | count={event['normal_count']} | "
             f"price={event['price']} size={event['size']}"
         )
 
@@ -102,6 +122,8 @@ def publish_event(symbol: str, price: float, size: int, raw: dict):
 def main(poll_interval: float = 2.0):
     # symbols: prefer settings.SYMBOLS, fallback to default list
     symbols = getattr(settings, "FINNHUB_SYMBOLS", None) or getattr(settings, "SYMBOLS", ["RELIANCE", "INFY", "TCS"])
+    # normalize configured symbols: strip exchange suffix (N.S etc) for NSE calls
+    symbols = [s.split('.')[0] for s in symbols]
 
     # maintain simple OHLCV per-symbol if desired
     ohlcv = {s: {"o": None, "h": 0, "l": float("inf"), "v": 0} for s in symbols}

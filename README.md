@@ -231,3 +231,16 @@ Indexing & storage suggestions:
 - [features/feature_builder.py](features/feature_builder.py)
 - [docker-compose.yml](docker-compose.yml)
 
+
+# 1. Set your symbols
+echo "NSE_SYMBOLS=RELIANCE,TCS,INFY,HDFCBANK" > .env
+
+# 2. Start stack
+docker compose up -d
+
+# 3. Run ingestion (in screen/tmux or systemd)
+docker compose run --rm postgres psql -h postgres -U postgres -d stockdb -f init.sql
+python nse_multi_ingest.py
+
+# 4. Grafana: http://localhost:3000 (admin/admin)
+# Dashboard auto-loads with symbol dropdown!

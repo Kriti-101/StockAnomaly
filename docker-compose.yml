@@ -1,0 +1,32 @@
+
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: stock-postgres
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_DB: stockdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Zener45
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  grafana:
+    image: grafana/grafana
+    container_name: stock-grafana
+    ports:
+      - 3000:3000
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    depends_on:
+      - postgres
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+volumes:
+  postgres_data:
+  grafana-storage:
